@@ -5,24 +5,24 @@ Donate link:
 Contributors: Thiarara, Superwp
 Tags: Menu visibility, menu, visibility
 Requires at least: 4.7
-Tested up to: 6.2
+Tested up to: 6.6
 Requires PHP: 7.0
-Stable tag: 1.0.03
+Stable tag: 1.0.04
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 == Description ==
 
-Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more. SuperWP Menu Visibility allows you to customize your site's navigation to enhance user experience by showing or hiding menu items as per your requirements.
+Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more. **SuperWP Menu Visibility** allows you to customize your site's navigation to enhance user experience by showing or hiding menu items as per your requirements.
 
-== Installation ==
+ Installation 
 
 1. Upload the `superwp-menu-visibility` folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the 'Plugins' menu in WordPress.
 3. Navigate to the 'Settings' menu and select 'Menu Visibility' to configure your options.
 4. Customize menu items by editing them in the WordPress Menu Editor, where you can set visibility options.
 
-== Usage ==
+ Usage 
 
 Once activated, the plugin adds visibility options to your menu items. You can control who sees each item based on:
 - User role (logged-in, logged-out, admin/editor, author)
@@ -34,6 +34,10 @@ Once activated, the plugin adds visibility options to your menu items. You can c
 Simply select the desired visibility settings when editing a menu item in the WordPress dashboard.
 
 == Changelog ==
+
+= 1.0.03 =
+* Improved performance and user experience.
+* Minor bug fixes and enhancements.
 
 = 1.0.02 =
 * Fixed bugs related to geolocation API usage.
@@ -60,9 +64,8 @@ You can report issues and request features via the GitHub repository: https://gi
 
 == Upgrade Notice ==
 
-= 1.0.02 =
+= 1.0.03 =
 Bug fixes and improvements for better performance.
-* Birthday of SuperWP Menu Visibility
 
 == License ==
 

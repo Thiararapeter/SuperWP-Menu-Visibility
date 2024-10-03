@@ -11,7 +11,7 @@
  * Plugin Name:   SuperWP Menu Visibility
  * Plugin URI:    https://github.com/Thiararapeter/SuperWP-Menu-Visibility
  * Description:   Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more.
- * Version:       1.0.03
+ * Version:       1.0.04
  * Author:        Thiarara
  * Author URI:    https://profiles.wordpress.org/thiarara/
  * Text Domain:   superwp-menu-visibility

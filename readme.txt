@@ -7,55 +7,63 @@ Tags: Menu visibility, menu, visibility
 Requires at least: 4.7
 Tested up to: 6.2
 Requires PHP: 7.0
-Stable tag: 1.0.02
+Stable tag: 1.0.03
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more.
-
 == Description ==
 
-This is the long description.  No limit, and you can use Markdown (as well as in the following sections).
-
-For backwards compatibility, if this section is missing, the full length of the short description will be used, and
-Markdown parsed.
-
-A few notes about the sections above:
-
-*   "Contributors" is a comma separated list of wordpress.org usernames
-*   "Tags" is a comma separated list of tags that apply to the plugin
-*   "Requires at least" is the lowest version that the plugin will work on
-*   "Tested up to" is the highest version that you've *successfully used to test the plugin*. Note that it might work on
-higher versions... this is just the highest one you've verified.
-*   Stable tag should indicate the Subversion "tag" of the latest stable version, or "trunk," if you use `/trunk/` for
-stable.
-
-    Note that the `readme.txt` of the stable tag is the one that is considered the defining one for the plugin, so
-if the `/trunk/readme.txt` file says that the stable tag is `4.3`, then it is `/tags/4.3/readme.txt` that'll be used
-for displaying information about the plugin.  In this situation, the only thing considered from the trunk `readme.txt`
-is the stable tag pointer.  Thus, if you develop in trunk, you can update the trunk `readme.txt` to reflect changes in
-your in-development version, without having that information incorrectly disclosed about the current stable version
-that lacks those changes -- as long as the trunk's `readme.txt` points to the correct stable tag.
-
-    If no stable tag is provided, it is assumed that trunk is stable, but you should specify "trunk" if that's where
-you put the stable version, in order to eliminate any doubt.
-
-
-== Frequently Asked Questions ==
-
-= A question that someone might have =
-
-An answer to that question.
-
+Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more. SuperWP Menu Visibility allows you to customize your site's navigation to enhance user experience by showing or hiding menu items as per your requirements.
 
 == Installation ==
 
-1. Go to `Plugins` in the Admin menu
-2. Click on the button `Add new`
-3. Search for `SuperWP Menu Visibility` and click 'Install Now' or click on the `upload` link to upload `superwp-menu-visibility.zip`
-4. Click on `Activate plugin`
+1. Upload the `superwp-menu-visibility` folder to the `/wp-content/plugins/` directory.
+2. Activate the plugin through the 'Plugins' menu in WordPress.
+3. Navigate to the 'Settings' menu and select 'Menu Visibility' to configure your options.
+4. Customize menu items by editing them in the WordPress Menu Editor, where you can set visibility options.
+
+== Usage ==
+
+Once activated, the plugin adds visibility options to your menu items. You can control who sees each item based on:
+- User role (logged-in, logged-out, admin/editor, author)
+- Device type (mobile, desktop)
+- Page type (front page, single post)
+- Language (with Polylang integration)
+- Geolocation (allowed countries)
+
+Simply select the desired visibility settings when editing a menu item in the WordPress dashboard.
 
 == Changelog ==
 
-= 1.0.02: October 3, 2024 =
+= 1.0.02 =
+* Fixed bugs related to geolocation API usage.
+* Improved compatibility with various themes.
+
+= 1.0.01 =
+* Initial release of SuperWP Menu Visibility plugin.
+
+== Frequently Asked Questions ==
+
+= How do I control the visibility of menu items? =
+You can set visibility rules for each menu item while editing the menu in the WordPress admin. Options include visibility based on user roles, device type, page type, and more.
+
+= Is this plugin compatible with Polylang? =
+Yes, the plugin supports language-specific visibility if you have the Polylang plugin installed.
+
+= How can I report bugs or request features? =
+You can report issues and request features via the GitHub repository: https://github.com/Thiararapeter/SuperWP-Menu-Visibility
+
+== Screenshots ==
+
+1. Menu visibility options in the WordPress Menu Editor.
+2. Settings page for configuring plugin options.
+
+== Upgrade Notice ==
+
+= 1.0.02 =
+Bug fixes and improvements for better performance.
 * Birthday of SuperWP Menu Visibility
+
+== License ==
+
+This plugin is licensed under the GPLv2 or later license. See the LICENSE file for details.

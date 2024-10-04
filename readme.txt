@@ -7,7 +7,7 @@ Tags: Menu visibility, menu, visibility
 Requires at least: 4.7
 Tested up to: 6.6
 Requires PHP: 7.0
-Stable tag: 1.0.04
+Stable tag: 1.0.05
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 

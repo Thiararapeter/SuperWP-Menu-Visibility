@@ -11,7 +11,7 @@
  * Plugin Name:   SuperWP Menu Visibility
  * Plugin URI:    https://github.com/Thiararapeter/SuperWP-Menu-Visibility
  * Description:   Control the visibility of WordPress menu items based on user roles, login state, device, location, language, and more.
- * Version:       1.0.04
+ * Version:       1.0.05
  * Author:        Thiarara
  * Author URI:    https://profiles.wordpress.org/thiarara/
  * Text Domain:   superwp-menu-visibility
@@ -50,18 +50,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * License: GPL2
  */
 
-// Enqueue admin scripts and styles for menu settings
-function superwp_enqueue_admin_scripts() {
-    wp_enqueue_style('superwp-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css');
-    wp_enqueue_script('superwp-admin-script', plugin_dir_url(__FILE__) . 'admin-script.js', array('jquery'), '1.0', true);
-}
-add_action('admin_enqueue_scripts', 'superwp_enqueue_admin_scripts');
-
 // Add custom menu item visibility logic
 function superwp_menu_visibility_control($items, $args) {
     // Get settings values
     $debug_mode = get_option('superwp_debug_mode', 'no');
-    $advanced_features = get_option('superwp_enable_advanced_features', 'no');
+    $enable_location = get_option('superwp_enable_location', 'no');
+    $enable_language = get_option('superwp_enable_language', 'no');
+    $enable_woocommerce = get_option('superwp_enable_woocommerce', 'no');
     $geolocation_api_key = get_option('superwp_geolocation_api_key', '');
     
     foreach ($items as $key => $item) {
@@ -123,10 +118,10 @@ function superwp_menu_visibility_control($items, $args) {
             if ($debug_mode === 'yes') error_log("Menu item {$item->title} hidden (desktop-only)");
         }
 
-        // Language-specific visibility (Polylang integration)
-        if ($advanced_features === 'yes' && function_exists('pll_current_language')) {
+        // Language-specific visibility (GTranslate integration)
+        if ($enable_language === 'yes') {
             $menu_item_lang = get_post_meta($item->ID, '_menu_item_language', true);
-            $current_lang = pll_current_language();
+            $current_lang = superwp_get_current_language();
             if (!empty($menu_item_lang) && $menu_item_lang !== $current_lang) {
                 unset($items[$key]);
                 if ($debug_mode === 'yes') error_log("Menu item {$item->title} hidden (language mismatch)");
@@ -134,11 +129,23 @@ function superwp_menu_visibility_control($items, $args) {
         }
 
         // Country-specific visibility
-        if ($advanced_features === 'yes' && !empty($geolocation_api_key) && !empty($allowed_countries)) {
+        if ($enable_location === 'yes' && !empty($geolocation_api_key) && !empty($allowed_countries)) {
             $user_country = superwp_get_user_country($geolocation_api_key);
-            if (!in_array($user_country, $allowed_countries)) {
+            if ($user_country && !in_array($user_country, $allowed_countries)) {
                 unset($items[$key]);
                 if ($debug_mode === 'yes') error_log("Menu item {$item->title} hidden (country mismatch)");
+            }
+        }
+
+        // WooCommerce-specific visibility
+        if ($enable_woocommerce === 'yes' && function_exists('is_woocommerce')) {
+            $woo_visibility = get_post_meta($item->ID, '_menu_item_woo_visibility', true);
+            if ($woo_visibility === 'shop-only' && !is_shop()) {
+                unset($items[$key]);
+                if ($debug_mode === 'yes') error_log("Menu item {$item->title} hidden (not on shop page)");
+            } elseif ($woo_visibility === 'product-only' && !is_product()) {
+                unset($items[$key]);
+                if ($debug_mode === 'yes') error_log("Menu item {$item->title} hidden (not on product page)");
             }
         }
     }
@@ -167,11 +174,21 @@ function superwp_get_user_country($api_key) {
     return false;
 }
 
+// Function to get current language (GTranslate integration)
+function superwp_get_current_language() {
+    if (function_exists('gtranslate_get_lang')) {
+        return gtranslate_get_lang();
+    }
+    return get_locale();
+}
+
 // Add visibility options to menu items in admin
 function superwp_add_menu_visibility_option($item_id, $item, $depth, $args, $id) {
     $visibility = get_post_meta($item_id, '_menu_item_visibility', true);
     $allowed_countries = get_post_meta($item_id, '_menu_item_allowed_countries', true);
-    $advanced_features = get_option('superwp_enable_advanced_features', 'no');
+    $enable_location = get_option('superwp_enable_location', 'no');
+    $enable_language = get_option('superwp_enable_language', 'no');
+    $enable_woocommerce = get_option('superwp_enable_woocommerce', 'no');
     ?>
     <p class="field-visibility description description-wide">
         <label for="edit-menu-item-visibility-<?php echo esc_attr($item_id); ?>">
@@ -190,18 +207,18 @@ function superwp_add_menu_visibility_option($item_id, $item, $depth, $args, $id)
         </label>
     </p>
     <?php
-    // Add language selection for Polylang integration
-    if ($advanced_features === 'yes' && function_exists('pll_the_languages')) {
+    // Add language selection for GTranslate integration
+    if ($enable_language === 'yes') {
         $menu_item_lang = get_post_meta($item_id, '_menu_item_language', true);
-        $languages = pll_the_languages(array('raw' => 1));
+        $languages = superwp_get_available_languages();
         ?>
         <p class="field-language description description-wide">
             <label for="edit-menu-item-language-<?php echo esc_attr($item_id); ?>">
                 <?php _e('Menu Item Language', 'superwp'); ?><br />
                 <select id="edit-menu-item-language-<?php echo esc_attr($item_id); ?>" name="menu-item-language[<?php echo esc_attr($item_id); ?>]">
                     <option value="" <?php selected($menu_item_lang, ''); ?>><?php _e('All Languages', 'superwp'); ?></option>
-                    <?php foreach ($languages as $lang) : ?>
-                        <option value="<?php echo esc_attr($lang['slug']); ?>" <?php selected($menu_item_lang, $lang['slug']); ?>><?php echo esc_html($lang['name']); ?></option>
+                    <?php foreach ($languages as $code => $name) : ?>
+                        <option value="<?php echo esc_attr($code); ?>" <?php selected($menu_item_lang, $code); ?>><?php echo esc_html($name); ?></option>
                     <?php endforeach; ?>
                 </select>
             </label>
@@ -209,7 +226,7 @@ function superwp_add_menu_visibility_option($item_id, $item, $depth, $args, $id)
         <?php
     }
     // Add country selection for geolocation-based visibility
-    if ($advanced_features === 'yes') {
+    if ($enable_location === 'yes') {
         ?>
         <p class="field-allowed-countries description description-wide">
             <label for="edit-menu-item-allowed-countries-<?php echo esc_attr($item_id); ?>">
@@ -217,6 +234,22 @@ function superwp_add_menu_visibility_option($item_id, $item, $depth, $args, $id)
                 <input type="text" id="edit-menu-item-allowed-countries-<?php echo esc_attr($item_id); ?>" 
                        name="menu-item-allowed-countries[<?php echo esc_attr($item_id); ?>]" 
                        value="<?php echo esc_attr(is_array($allowed_countries) ? implode(',', $allowed_countries) : $allowed_countries); ?>" />
+            </label>
+        </p>
+        <?php
+    }
+    // Add WooCommerce-specific visibility options
+    if ($enable_woocommerce === 'yes' && function_exists('is_woocommerce')) {
+        $woo_visibility = get_post_meta($item_id, '_menu_item_woo_visibility', true);
+        ?>
+        <p class="field-woo-visibility description description-wide">
+            <label for="edit-menu-item-woo-visibility-<?php echo esc_attr($item_id); ?>">
+                <?php _e('WooCommerce Visibility', 'superwp'); ?><br />
+                <select id="edit-menu-item-woo-visibility-<?php echo esc_attr($item_id); ?>" name="menu-item-woo-visibility[<?php echo esc_attr($item_id); ?>]">
+                    <option value="" <?php selected($woo_visibility, ''); ?>><?php _e('All Pages', 'superwp'); ?></option>
+                    <option value="shop-only" <?php selected($woo_visibility, 'shop-only'); ?>><?php _e('Shop Page Only', 'superwp'); ?></option>
+                    <option value="product-only" <?php selected($woo_visibility, 'product-only'); ?>><?php _e('Product Pages Only', 'superwp'); ?></option>
+                </select>
             </label>
         </p>
         <?php
@@ -232,7 +265,7 @@ function superwp_save_menu_visibility_option($menu_id, $menu_item_db_id) {
         delete_post_meta($menu_item_db_id, '_menu_item_visibility');
     }
 
-    // Save language selection for Polylang integration
+    // Save language selection for GTranslate integration
     if (isset($_POST['menu-item-language'][$menu_item_db_id])) {
         update_post_meta($menu_item_db_id, '_menu_item_language', sanitize_text_field($_POST['menu-item-language'][$menu_item_db_id]));
     } else {
@@ -244,242 +277,277 @@ function superwp_save_menu_visibility_option($menu_id, $menu_item_db_id) {
         $allowed_countries = explode(',', sanitize_text_field($_POST['menu-item-allowed-countries'][$menu_item_db_id]));
         $allowed_countries = array_map('trim', $allowed_countries);
         update_post_meta($menu_item_db_id, '_menu_item_allowed_countries', $allowed_countries);
-    } else {
+		} else {
         delete_post_meta($menu_item_db_id, '_menu_item_allowed_countries');
+    }
+
+    // Save WooCommerce-specific visibility
+    if (isset($_POST['menu-item-woo-visibility'][$menu_item_db_id])) {
+        update_post_meta($menu_item_db_id, '_menu_item_woo_visibility', sanitize_text_field($_POST['menu-item-woo-visibility'][$menu_item_db_id]));
+    } else {
+        delete_post_meta($menu_item_db_id, '_menu_item_woo_visibility');
     }
 }
 add_action('wp_update_nav_menu_item', 'superwp_save_menu_visibility_option', 10, 2);
 
-// Add plugin settings page as a submenu under the Settings menu
+// Add plugin settings page
 function superwp_menu_visibility_settings_page() {
-    add_submenu_page(
-        'options-general.php',              // Parent menu (Settings)
-        __('SuperWP Menu Visibility Settings', 'superwp'),  // Page title
-        __('Menu Visibility', 'superwp'),   // Menu title
-        'manage_options',                   // Capability
-        'superwp-menu-visibility',          // Menu slug
-        'superwp_menu_visibility_settings_page_html'  // Function to display the settings page
+    add_options_page(
+        'SuperWP Menu Visibility Settings',
+        'Menu Visibility',
+        'manage_options',
+        'superwp-menu-visibility',
+        'superwp_menu_visibility_settings_page_content'
     );
 }
 add_action('admin_menu', 'superwp_menu_visibility_settings_page');
 
-// Render the plugin settings page
-function superwp_menu_visibility_settings_page_html() {
-    // Check user capabilities
+// Settings page content
+function superwp_menu_visibility_settings_page_content() {
     if (!current_user_can('manage_options')) {
         return;
     }
 
-    // Check if settings were updated
-    if (isset($_GET['settings-updated'])) {
-        add_settings_error('superwp_messages', 'superwp_message', __('Settings Saved', 'superwp'), 'updated');
+    if (isset($_POST['superwp_save_settings'])) {
+        check_admin_referer('superwp_menu_visibility_settings');
+        
+        update_option('superwp_debug_mode', isset($_POST['superwp_debug_mode']) ? 'yes' : 'no');
+        update_option('superwp_enable_location', isset($_POST['superwp_enable_location']) ? 'yes' : 'no');
+        update_option('superwp_enable_language', isset($_POST['superwp_enable_language']) ? 'yes' : 'no');
+        update_option('superwp_enable_woocommerce', isset($_POST['superwp_enable_woocommerce']) ? 'yes' : 'no');
+        update_option('superwp_geolocation_api_key', sanitize_text_field($_POST['superwp_geolocation_api_key']));
+        update_option('superwp_default_visibility', sanitize_text_field($_POST['superwp_default_visibility']));
+        
+        echo '<div class="updated"><p>Settings saved successfully!</p></div>';
     }
 
-    // Show error/update messages
-    settings_errors('superwp_messages');
+    $debug_mode = get_option('superwp_debug_mode', 'no');
+    $enable_location = get_option('superwp_enable_location', 'no');
+    $enable_language = get_option('superwp_enable_language', 'no');
+    $enable_woocommerce = get_option('superwp_enable_woocommerce', 'no');
+    $geolocation_api_key = get_option('superwp_geolocation_api_key', '');
+    $default_visibility = get_option('superwp_default_visibility', '');
     ?>
     <div class="wrap">
         <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-        <form action="options.php" method="post">
-            <?php
-            settings_fields('superwp_menu_visibility_settings');
-            do_settings_sections('superwp_menu_visibility_settings');
-            submit_button('Save Settings');
-            ?>
+        <form method="post" action="">
+            <?php wp_nonce_field('superwp_menu_visibility_settings'); ?>
+            
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="superwp_debug_mode">Enable Debug Mode</label></th>
+                    <td>
+                        <input type="checkbox" id="superwp_debug_mode" name="superwp_debug_mode" <?php checked($debug_mode, 'yes'); ?>>
+                        <p class="description">Log visibility decisions for debugging purposes.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="superwp_enable_location">Enable Location-based Visibility</label></th>
+                    <td>
+                        <input type="checkbox" id="superwp_enable_location" name="superwp_enable_location" <?php checked($enable_location, 'yes'); ?>>
+                        <p class="description">Allow menu items to be shown/hidden based on user's location.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="superwp_enable_language">Enable Language-based Visibility</label></th>
+                    <td>
+                        <input type="checkbox" id="superwp_enable_language" name="superwp_enable_language" <?php checked($enable_language, 'yes'); ?>>
+                        <p class="description">Allow menu items to be shown/hidden based on the current language.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="superwp_enable_woocommerce">Enable WooCommerce-specific Visibility</label></th>
+                    <td>
+                        <input type="checkbox" id="superwp_enable_woocommerce" name="superwp_enable_woocommerce" <?php checked($enable_woocommerce, 'yes'); ?>>
+                        <p class="description">Allow menu items to have WooCommerce-specific visibility options.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="superwp_geolocation_api_key">Geolocation API Key</label></th>
+                    <td>
+                        <input type="password" id="superwp_geolocation_api_key" name="superwp_geolocation_api_key" value="<?php echo esc_attr($geolocation_api_key); ?>" class="regular-text">
+                        <p class="description">Enter your Geolocation API key for location-based visibility.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="superwp_default_visibility">Default Visibility</label></th>
+                    <td>
+                        <select id="superwp_default_visibility" name="superwp_default_visibility">
+                            <option value="" <?php selected($default_visibility, ''); ?>><?php _e('Visible to all', 'superwp'); ?></option>
+                            <option value="logged-in-only" <?php selected($default_visibility, 'logged-in-only'); ?>><?php _e('Only Logged-in Users', 'superwp'); ?></option>
+                            <option value="logged-out-only" <?php selected($default_visibility, 'logged-out-only'); ?>><?php _e('Only Logged-out Users', 'superwp'); ?></option>
+                        </select>
+                        <p class="description">Set the default visibility for menu items without specific rules.</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <p class="submit">
+                <input type="submit" name="superwp_save_settings" class="button-primary" value="Save Settings">
+            </p>
         </form>
     </div>
     <?php
 }
 
-// Register and define settings for the plugin
-function superwp_menu_visibility_settings_init() {
-    register_setting('superwp_menu_visibility_settings', 'superwp_visibility_rules');
-    register_setting('superwp_menu_visibility_settings', 'superwp_default_visibility');
-    register_setting('superwp_menu_visibility_settings', 'superwp_debug_mode');
-    register_setting('superwp_menu_visibility_settings', 'superwp_enable_advanced_features');
-    register_setting('superwp_menu_visibility_settings', 'superwp_default_new_menu_visibility');
-    register_setting('superwp_menu_visibility_settings', 'superwp_geolocation_api_key');
-    
-   add_settings_section(
-        'superwp_menu_visibility_section',
-        __('Visibility Rules', 'superwp'),
-        'superwp_menu_visibility_section_cb',
-        'superwp_menu_visibility_settings'
-    );
-    
-    add_settings_field(
-        'superwp_default_visibility',
-        __('Default Visibility Rule', 'superwp'),
-        'superwp_default_visibility_cb',
-        'superwp_menu_visibility_settings',
-        'superwp_menu_visibility_section'
-    );
-
-    add_settings_field(
-        'superwp_debug_mode',
-        __('Enable Debug Mode', 'superwp'),
-        'superwp_debug_mode_cb',
-        'superwp_menu_visibility_settings',
-        'superwp_menu_visibility_section'
-    );
-
-    add_settings_field(
-        'superwp_enable_advanced_features',
-        __('Enable Advanced Features', 'superwp'),
-        'superwp_enable_advanced_features_cb',
-        'superwp_menu_visibility_settings',
-        'superwp_menu_visibility_section'
-    );
-
-    add_settings_field(
-        'superwp_default_new_menu_visibility',
-        __('Default Visibility for New Menus', 'superwp'),
-        'superwp_default_new_menu_visibility_cb',
-        'superwp_menu_visibility_settings',
-        'superwp_menu_visibility_section'
-    );
-
-    add_settings_field(
-        'superwp_geolocation_api_key',
-        __('Geolocation API Key', 'superwp'),
-        'superwp_geolocation_api_key_cb',
-        'superwp_menu_visibility_settings',
-        'superwp_menu_visibility_section'
-    );
-}
-add_action('admin_init', 'superwp_menu_visibility_settings_init');
-
-// Callback function for the settings section
-function superwp_menu_visibility_section_cb() {
-    echo '<p>' . __('Configure menu visibility settings below.', 'superwp') . '</p>';
+// Function to get available languages (for GTranslate integration)
+function superwp_get_available_languages() {
+    if (function_exists('gtranslate_get_available_languages')) {
+        return gtranslate_get_available_languages();
+    }
+    return array('en' => 'English'); // Fallback if GTranslate is not available
 }
 
-// Field callback for default visibility
-function superwp_default_visibility_cb() {
-    $default_visibility = get_option('superwp_default_visibility', '');
-    ?>
-    <select name="superwp_default_visibility">
-        <option value="" <?php selected($default_visibility, ''); ?>><?php _e('Default (Visible to all)', 'superwp'); ?></option>
-        <option value="logged-in-only" <?php selected($default_visibility, 'logged-in-only'); ?>><?php _e('Only Logged-in Users', 'superwp'); ?></option>
-        <option value="logged-out-only" <?php selected($default_visibility, 'logged-out-only'); ?>><?php _e('Only Logged-out Users', 'superwp'); ?></option>
-    </select>
-    <?php
+// Modify the menu items in the admin area to show visibility status
+function superwp_admin_menu_visibility_indicator($item_output, $item, $depth, $args) {
+    if (is_admin()) {
+        $visibility = get_post_meta($item->ID, '_menu_item_visibility', true);
+        if ($visibility) {
+            $item_output .= ' <span class="superwp-visibility-indicator" title="Visibility: ' . esc_attr($visibility) . '">👁️</span>';
+        }
+    }
+    return $item_output;
 }
+add_filter('walker_nav_menu_item_title', 'superwp_admin_menu_visibility_indicator', 10, 4);
 
-// Field callback for debug mode
-function superwp_debug_mode_cb() {
-    $debug_mode = get_option('superwp_debug_mode', 'no');
-    ?>
-    <input type="checkbox" name="superwp_debug_mode" value="yes" <?php checked($debug_mode, 'yes'); ?> />
-    <?php _e('Enable Debug Mode (Logs applied visibility rules)', 'superwp'); ?>
-    <?php
+// Add custom CSS for the admin area
+function superwp_admin_custom_css() {
+    echo '<style>
+        .superwp-visibility-indicator {
+            display: inline-block;
+            margin-left: 5px;
+            font-size: 16px;
+            vertical-align: middle;
+        }
+    </style>';
 }
+add_action('admin_head', 'superwp_admin_custom_css');
 
-// Field callback for enabling advanced features
-function superwp_enable_advanced_features_cb() {
-    $advanced_features = get_option('superwp_enable_advanced_features', 'no');
-    ?>
-    <input type="checkbox" name="superwp_enable_advanced_features" value="yes" <?php checked($advanced_features, 'yes'); ?> />
-    <?php _e('Enable Advanced Features (Location, Language, WooCommerce)', 'superwp'); ?>
-    <?php
-}
+// Function to check if a menu item should be visible based on all criteria
+function superwp_should_menu_item_be_visible($item) {
+    $visibility = get_post_meta($item->ID, '_menu_item_visibility', true);
+    $allowed_countries = get_post_meta($item->ID, '_menu_item_allowed_countries', true);
+    $menu_item_lang = get_post_meta($item->ID, '_menu_item_language', true);
+    $woo_visibility = get_post_meta($item->ID, '_menu_item_woo_visibility', true);
 
-// Field callback for default visibility for new menus
-function superwp_default_new_menu_visibility_cb() {
-    $default_new_menu_visibility = get_option('superwp_default_new_menu_visibility', '');
-    ?>
-    <select name="superwp_default_new_menu_visibility">
-        <option value="" <?php selected($default_new_menu_visibility, ''); ?>><?php _e('Default (Visible to all)', 'superwp'); ?></option>
-        <option value="logged-in-only" <?php selected($default_new_menu_visibility, 'logged-in-only'); ?>><?php _e('Only Logged-in Users', 'superwp'); ?></option>
-        <option value="logged-out-only" <?php selected($default_new_menu_visibility, 'logged-out-only'); ?>><?php _e('Only Logged-out Users', 'superwp'); ?></option>
-    </select>
-    <?php
-}
-
-// Field callback for geolocation API key
-function superwp_geolocation_api_key_cb() {
+    $enable_location = get_option('superwp_enable_location', 'no');
+    $enable_language = get_option('superwp_enable_language', 'no');
+    $enable_woocommerce = get_option('superwp_enable_woocommerce', 'no');
     $geolocation_api_key = get_option('superwp_geolocation_api_key', '');
-    ?>
-    <input type="text" name="superwp_geolocation_api_key" value="<?php echo esc_attr($geolocation_api_key); ?>" size="40" />
-    <p class="description">
-        <?php _e('Enter your Geolocation API Key here.', 'superwp'); ?>
-        <a href="https://ipgeolocation.io/" target="_blank"><?php _e('Get your API key', 'superwp'); ?></a>
-    </p>
-    <?php
+    $debug_mode = get_option('superwp_debug_mode', 'no');
+
+    // Check visibility rules
+    if ($visibility === 'logged-in-only' && !is_user_logged_in()) {
+        return false;
+    }
+    if ($visibility === 'logged-out-only' && is_user_logged_in()) {
+        return false;
+    }
+    if ($visibility === 'admin-editor-only' && !(current_user_can('administrator') || current_user_can('editor'))) {
+        return false;
+    }
+    if ($visibility === 'author-only' && !current_user_can('author')) {
+        return false;
+    }
+    if ($visibility === 'front-page-only' && !is_front_page()) {
+        return false;
+    }
+    if ($visibility === 'single-post-only' && !is_single()) {
+        return false;
+    }
+    if ($visibility === 'hide-on-mobile' && wp_is_mobile()) {
+        return false;
+    }
+    if ($visibility === 'desktop-only' && wp_is_mobile()) {
+        return false;
+    }
+
+    // Check language-based visibility
+    if ($enable_language === 'yes' && !empty($menu_item_lang)) {
+        $current_lang = superwp_get_current_language();
+        if ($menu_item_lang !== $current_lang) {
+            return false;
+        }
+    }
+
+    // Check location-based visibility
+    if ($enable_location === 'yes' && !empty($geolocation_api_key) && !empty($allowed_countries)) {
+        $user_country = superwp_get_user_country($geolocation_api_key);
+        if ($user_country && !in_array($user_country, $allowed_countries)) {
+            return false;
+        }
+    }
+
+    // Check WooCommerce-specific visibility
+    if ($enable_woocommerce === 'yes' && function_exists('is_woocommerce')) {
+        if ($woo_visibility === 'shop-only' && !is_shop()) {
+            return false;
+        } elseif ($woo_visibility === 'product-only' && !is_product()) {
+            return false;
+        }
+    }
+
+    // Log visibility decision if debug mode is enabled
+    if ($debug_mode === 'yes') {
+        error_log("Menu item {$item->title} is visible");
+    }
+
+    return true;
 }
 
-// Add settings link on plugin page
-function superwp_settings_link($links) {
-    $settings_link = '<a href="options-general.php?page=superwp-menu-visibility">' . __('Settings', 'superwp') . '</a>';
-    array_unshift($links, $settings_link);
-    return $links;
+// Add a dashboard widget to display visibility statistics
+function superwp_add_dashboard_widget() {
+    wp_add_dashboard_widget(
+        'superwp_visibility_stats',
+        'Menu Visibility Statistics',
+        'superwp_display_visibility_stats'
+    );
 }
-$plugin = plugin_basename(__FILE__);
-add_filter("plugin_action_links_$plugin", 'superwp_settings_link');
+add_action('wp_dashboard_setup', 'superwp_add_dashboard_widget');
 
-// Display admin notices for success and error messages
-function superwp_admin_notices() {
-    settings_errors('superwp_messages');
-}
-add_action('admin_notices', 'superwp_admin_notices');
+function superwp_display_visibility_stats() {
+    $menus = wp_get_nav_menus();
+    $total_items = 0;
+    $hidden_items = 0;
 
-// Sanitize and validate input before saving
-function superwp_sanitize_options($input) {
-    $new_input = array();
-    
-    if (isset($input['superwp_default_visibility'])) {
-        $new_input['superwp_default_visibility'] = sanitize_text_field($input['superwp_default_visibility']);
+    foreach ($menus as $menu) {
+        $menu_items = wp_get_nav_menu_items($menu->term_id);
+        if ($menu_items) {
+            foreach ($menu_items as $item) {
+                $total_items++;
+                if (!superwp_should_menu_item_be_visible($item)) {
+                    $hidden_items++;
+                }
+            }
+        }
     }
-    
-    if (isset($input['superwp_debug_mode'])) {
-        $new_input['superwp_debug_mode'] = ($input['superwp_debug_mode'] == 'yes') ? 'yes' : 'no';
-    }
-    
-    if (isset($input['superwp_enable_advanced_features'])) {
-        $new_input['superwp_enable_advanced_features'] = ($input['superwp_enable_advanced_features'] == 'yes') ? 'yes' : 'no';
-    }
-    
-    if (isset($input['superwp_default_new_menu_visibility'])) {
-        $new_input['superwp_default_new_menu_visibility'] = sanitize_text_field($input['superwp_default_new_menu_visibility']);
-    }
-    
-    if (isset($input['superwp_geolocation_api_key'])) {
-        $new_input['superwp_geolocation_api_key'] = sanitize_text_field($input['superwp_geolocation_api_key']);
-    }
-    
-    return $new_input;
+
+    echo "<p>Total menu items: {$total_items}</p>";
+    echo "<p>Hidden menu items: {$hidden_items}</p>";
+    echo "<p>Visible menu items: " . ($total_items - $hidden_items) . "</p>";
 }
 
-// Register sanitization callback
-register_setting(
-    'superwp_menu_visibility_settings',
-    'superwp_menu_visibility_options',
-    'superwp_sanitize_options'
-);
-
-// Initialize plugin
-function superwp_menu_visibility_init() {
-    load_plugin_textdomain('superwp', false, dirname(plugin_basename(__FILE__)) . '/languages');
+// Activation hook to set default options
+function superwp_menu_visibility_activate() {
+    add_option('superwp_debug_mode', 'no');
+    add_option('superwp_enable_location', 'no');
+    add_option('superwp_enable_language', 'no');
+    add_option('superwp_enable_woocommerce', 'no');
+    add_option('superwp_geolocation_api_key', '');
+    add_option('superwp_default_visibility', '');
 }
-add_action('plugins_loaded', 'superwp_menu_visibility_init');
+register_activation_hook(__FILE__, 'superwp_menu_visibility_activate');
 
-// Add Polylang compatibility
-function superwp_polylang_compatibility() {
-    if (function_exists('pll_register_string')) {
-        pll_register_string('SuperWP Menu Visibility', 'Default (Visible to all)', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Only Logged-in Users', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Only Logged-out Users', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Admins and Editors Only', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Authors Only', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Only on Front Page', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Only on Single Post', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Hide on Mobile Devices', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'Show Only on Desktop', 'SuperWP');
-        pll_register_string('SuperWP Menu Visibility', 'All Languages', 'SuperWP');
-    }
+// Deactivation hook to clean up options
+function superwp_menu_visibility_deactivate() {
+    delete_option('superwp_debug_mode');
+    delete_option('superwp_enable_location');
+    delete_option('superwp_enable_language');
+    delete_option('superwp_enable_woocommerce');
+    delete_option('superwp_geolocation_api_key');
+    delete_option('superwp_default_visibility');
 }
-add_action('plugins_loaded', 'superwp_polylang_compatibility');
-
+register_deactivation_hook(__FILE__, 'superwp_menu_visibility_deactivate');
 
 // push update from Github
 require 'plugin-update-checker/plugin-update-checker.php';
